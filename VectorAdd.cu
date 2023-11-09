@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda_runtime.h>
+#include <chrono>
 
 // CUDA Kernel para sumar dos vectores
 __global__ void vectorAdd(const float *A, const float *B, float *C, int numElements)
@@ -24,7 +25,7 @@ void randomInit(float *data, int size)
 
 int main(void)
 {
-    int numElements = 1024; // El número de elementos en los vectores
+    int numElements = 1000000; // El número de elementos en los vectores
     size_t size = numElements * sizeof(float);
     srand(time(NULL)); // Inicializar la semilla de números aleatorios
 
@@ -36,18 +37,18 @@ int main(void)
     randomInit(h_A, numElements);
     randomInit(h_B, numElements);
 
-    // Imprimir los vectores A y B
-    printf("Vector A inicializado:\n");
-    for (int i = 0; i < numElements; i++)
-    {
-        printf("%.2f ", h_A[i]);
-    }
-    printf("\n\nVector B inicializado:\n");
-    for (int i = 0; i < numElements; i++)
-    {
-        printf("%.2f ", h_B[i]);
-    }
-    printf("\n\n");
+    // // Imprimir los vectores A y B
+    // // printf("Vector A inicializado:\n");
+    // for (int i = 0; i < numElements; i++)
+    // {
+    //     printf("%.2f ", h_A[i]);
+    // }
+    // // printf("\n\nVector B inicializado:\n");
+    // for (int i = 0; i < numElements; i++)
+    // {
+    //     printf("%.2f ", h_B[i]);
+    // }
+    // printf("\n\n");
 
     // Allocate los vectores en la memoria del device
     float *d_A, *d_B, *d_C;
@@ -59,25 +60,37 @@ int main(void)
     cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
 
+    // Medir tiempo para la suma en GPU
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+
     // Lanzar el kernel CUDA
-    int threadsPerBlock = 256;
+    int threadsPerBlock = 1024; // Máximo común para muchas GPUs
     int blocksPerGrid = (numElements + threadsPerBlock - 1) / threadsPerBlock;
     vectorAdd<<<blocksPerGrid, threadsPerBlock>>>(d_A, d_B, d_C, numElements);
 
     // Esperar a que todos los threads terminen
     cudaDeviceSynchronize();
 
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float milliseconds = 0;
+    cudaEventElapsedTime(&milliseconds, start, stop);
+
     // Copiar el vector resultado de vuelta al host
     cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
 
     // Imprimir el vector resultado y la suma total
     float totalSum = 0.0f;
-    printf("Vector C (Resultado):\n");
+    // printf("Vector C (Resultado):\n");
     for (int i = 0; i < numElements; i++)
     {
-        printf("%.2f ", h_C[i]);
         totalSum += h_C[i];
     }
+    printf("\nTiempo de ejecución en la GPU: %f ms\n", milliseconds);
     printf("\nResultado de la suma de los elementos en C: %.2f\n", totalSum);
 
     // Liberar la memoria del device
